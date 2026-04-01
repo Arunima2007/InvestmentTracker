@@ -1,0 +1,294 @@
+/**
+ * DashboardPage – the main investment dashboard.
+ *
+ * Renders:
+ *  1. Key stats (corpus, gains, allocation)
+ *  2. Pie chart  – asset allocation
+ *  3. Line chart – wealth projection over time
+ *  4. What-If simulator (SIP + risk sliders)
+ *  5. AI Insights cards
+ */
+
+import { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import {
+  PieChart, Pie, Cell, Tooltip as PieTooltip, ResponsiveContainer as PieRC, Legend,
+} from 'recharts';
+import {
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart,
+} from 'recharts';
+import { useAuth } from '../context/AuthContext';
+import { getProjection } from '../services/api';
+import Navbar from '../components/Navbar';
+import StatCard from '../components/StatCard';
+import InsightCard from '../components/InsightCard';
+
+// ── Chart colours ──────────────────────
+const PIE_COLORS = ['#7c4dff', '#06b6d4', '#10b981', '#f59e0b', '#ef4444'];
+const ASSET_LABELS = {
+  bonds: 'Bonds',
+  equity: 'Equity',
+  mutual_funds: 'Mutual Funds',
+  high_risk_assets: 'High-Risk Assets',
+};
+
+const RISK_OPTIONS = [
+  { value: 'low', label: '🐢 Low' },
+  { value: 'medium', label: '⚖️ Medium' },
+  { value: 'high', label: '🚀 High' },
+];
+
+/** Format ₹ amounts nicely */
+const fmt = (n) => {
+  if (n >= 1e7) return `₹${(n / 1e7).toFixed(2)} Cr`;
+  if (n >= 1e5) return `₹${(n / 1e5).toFixed(2)} L`;
+  return `₹${n?.toLocaleString('en-IN') || 0}`;
+};
+
+export default function DashboardPage() {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+
+  // ── State ────────────────────────────
+  const [data, setData]       = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError]     = useState('');
+
+  // What-if controls
+  const [wipSip, setWipSip]     = useState(user?.monthly_sip || 5000);
+  const [wipRisk, setWipRisk]   = useState(user?.computed_risk_level || user?.risk_tolerance || 'medium');
+  const [simulating, setSimulating] = useState(false);
+
+  // ── Fetch projection data ───────────
+  const fetchData = useCallback(async (sip, risk) => {
+    try {
+      const res = await getProjection({ monthly_sip: sip, risk_level: risk });
+      setData(res.data);
+      setError('');
+    } catch (err) {
+      if (err.response?.status === 400) {
+        navigate('/profile');
+      }
+      setError(err.response?.data?.error || 'Failed to load data');
+    }
+  }, [navigate]);
+
+  // Initial load
+  useEffect(() => {
+    setLoading(true);
+    fetchData(wipSip, wipRisk).finally(() => setLoading(false));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── What-if simulate ────────────────
+  const handleSimulate = async () => {
+    setSimulating(true);
+    await fetchData(wipSip, wipRisk);
+    setSimulating(false);
+  };
+
+  // ── Derived data ────────────────────
+  const allocation = data?.recommendation?.allocation || {};
+  const pieData = Object.entries(allocation).map(([key, val]) => ({
+    name: ASSET_LABELS[key] || key,
+    value: val,
+  }));
+
+  const projections = data?.projection?.projections || [];
+  const insights    = data?.insights || [];
+  const finalCorpus = data?.projection?.final_corpus || 0;
+  const totalGains  = data?.projection?.total_gains || 0;
+  const annualReturn = data?.recommendation?.expected_annual_return || 0;
+
+  // ── Loading / error states ──────────
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-surface-0 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin w-12 h-12 border-4 border-brand-400 border-t-transparent rounded-full mx-auto mb-4" />
+          <p className="text-text-secondary">Crunching your numbers…</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-surface-0">
+      <Navbar />
+      <main className="pt-20 pb-16 px-4 max-w-7xl mx-auto">
+        {/* ── Header ─────────────────────── */}
+        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between mb-8">
+          <div>
+            <h1 className="text-3xl font-bold gradient-text mb-1">Investment Dashboard</h1>
+            <p className="text-text-secondary text-sm">
+              Personalized plan • {user?.financial_goal?.replace(/^\w/, c => c.toUpperCase())} goal
+              • {user?.time_horizon} year horizon
+            </p>
+          </div>
+          <button
+            onClick={() => navigate('/profile')}
+            className="mt-3 sm:mt-0 px-4 py-2 rounded-lg text-sm font-medium cursor-pointer
+                       bg-white/5 text-text-secondary border border-white/10
+                       hover:bg-brand-500/20 hover:text-brand-300 hover:border-brand-400/40
+                       transition-smooth"
+          >
+            ✏️ Edit Profile
+          </button>
+        </div>
+
+        {error && (
+          <div className="mb-6 p-3 rounded-lg bg-danger/10 border border-danger/30 text-danger text-sm">
+            {error}
+          </div>
+        )}
+
+        {/* ── Stat Cards ─────────────────── */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          <StatCard label="Expected Corpus" value={fmt(finalCorpus)} icon="💰"  />
+          <StatCard label="Total Gains"     value={fmt(totalGains)}  icon="📈"  />
+          <StatCard label="Annual Return"   value={`${(annualReturn * 100).toFixed(1)}%`} icon="⚡" />
+          <StatCard label="Monthly SIP"     value={fmt(wipSip)}      icon="📅"  />
+        </div>
+
+        {/* ── Charts Row ─────────────────── */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+          {/* Pie Chart */}
+          <div className="glass-card p-6 lg:col-span-1">
+            <h2 className="text-lg font-semibold text-text-primary mb-4">Asset Allocation</h2>
+            <PieRC width="100%" height={280}>
+              <PieChart>
+                <Pie
+                  data={pieData}
+                  cx="50%" cy="50%"
+                  innerRadius={60} outerRadius={100}
+                  paddingAngle={3}
+                  dataKey="value"
+                  animationDuration={800}
+                >
+                  {pieData.map((_, i) => (
+                    <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                  ))}
+                </Pie>
+                <PieTooltip
+                  contentStyle={{ background: '#181d35', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px' }}
+                  itemStyle={{ color: '#f1f5f9' }}
+                  formatter={(val) => `${val}%`}
+                />
+                <Legend
+                  verticalAlign="bottom"
+                  iconType="circle"
+                  formatter={(val) => <span style={{ color: '#94a3b8', fontSize: '12px' }}>{val}</span>}
+                />
+              </PieChart>
+            </PieRC>
+          </div>
+
+          {/* Area / Line Chart */}
+          <div className="glass-card p-6 lg:col-span-2">
+            <h2 className="text-lg font-semibold text-text-primary mb-4">Wealth Growth Projection</h2>
+            <ResponsiveContainer width="100%" height={280}>
+              <AreaChart data={projections} margin={{ top: 5, right: 20, bottom: 5, left: 10 }}>
+                <defs>
+                  <linearGradient id="corpusGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#7c4dff" stopOpacity={0.35} />
+                    <stop offset="100%" stopColor="#7c4dff" stopOpacity={0.02} />
+                  </linearGradient>
+                  <linearGradient id="investedGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#06b6d4" stopOpacity={0.25} />
+                    <stop offset="100%" stopColor="#06b6d4" stopOpacity={0.02} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                <XAxis dataKey="year" tick={{ fill: '#64748b', fontSize: 12 }} tickFormatter={(v) => `Y${v}`} />
+                <YAxis tick={{ fill: '#64748b', fontSize: 12 }} tickFormatter={(v) => fmt(v)} width={70} />
+                <Tooltip
+                  contentStyle={{ background: '#181d35', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px' }}
+                  labelStyle={{ color: '#94a3b8' }}
+                  itemStyle={{ color: '#f1f5f9' }}
+                  formatter={(val) => fmt(val)}
+                  labelFormatter={(v) => `Year ${v}`}
+                />
+                <Area type="monotone" dataKey="corpus" stroke="#7c4dff" fill="url(#corpusGrad)" strokeWidth={2.5} name="Corpus" />
+                <Area type="monotone" dataKey="total_invested" stroke="#06b6d4" fill="url(#investedGrad)" strokeWidth={2} name="Invested" strokeDasharray="5 5" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* ── What-If Simulator ──────────── */}
+        <div className="glass-card p-6 mb-8">
+          <h2 className="text-lg font-semibold text-text-primary mb-1 flex items-center gap-2">
+            <span>🔮</span> What-If Simulator
+          </h2>
+          <p className="text-text-muted text-sm mb-5">
+            Adjust your monthly SIP or risk level and see how your wealth projection changes.
+          </p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 items-end">
+            {/* SIP Slider */}
+            <div>
+              <label className="block text-text-secondary text-sm mb-2">
+                Monthly SIP: <span className="text-brand-300 font-semibold">{fmt(wipSip)}</span>
+              </label>
+              <input
+                type="range" min="0" max="100000" step="500"
+                value={wipSip}
+                onChange={(e) => setWipSip(Number(e.target.value))}
+                className="w-full accent-brand-500"
+              />
+              <div className="flex justify-between text-xs text-text-muted mt-1">
+                <span>₹0</span><span>₹50K</span><span>₹1L</span>
+              </div>
+            </div>
+
+            {/* Risk Toggle */}
+            <div>
+              <label className="block text-text-secondary text-sm mb-2">Risk Level</label>
+              <div className="flex gap-2">
+                {RISK_OPTIONS.map(r => (
+                  <button
+                    key={r.value} type="button"
+                    onClick={() => setWipRisk(r.value)}
+                    className={`flex-1 py-2 rounded-lg text-sm font-medium transition-smooth cursor-pointer border
+                      ${wipRisk === r.value
+                        ? 'border-brand-400 bg-brand-400/15 text-brand-300'
+                        : 'border-white/10 bg-surface-200 text-text-secondary hover:border-white/20'}`}
+                  >
+                    {r.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Simulate Button */}
+            <div>
+              <button
+                onClick={handleSimulate}
+                disabled={simulating}
+                className="w-full py-2.5 rounded-lg font-semibold text-white cursor-pointer border-none
+                           bg-gradient-to-r from-brand-500 to-accent-600
+                           hover:from-brand-400 hover:to-accent-500
+                           shadow-lg shadow-brand-500/20 transition-smooth disabled:opacity-50"
+              >
+                {simulating ? 'Simulating…' : '⚡ Simulate'}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* ── AI Insights ────────────────── */}
+        {insights.length > 0 && (
+          <div className="glass-card p-6">
+            <h2 className="text-lg font-semibold text-text-primary mb-4 flex items-center gap-2">
+              <span>🤖</span> AI Insights
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {insights.map((ins, i) => (
+                <InsightCard key={i} insight={ins} />
+              ))}
+            </div>
+          </div>
+        )}
+      </main>
+    </div>
+  );
+}
