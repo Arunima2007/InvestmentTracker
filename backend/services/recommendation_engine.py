@@ -73,9 +73,18 @@ def compute_features(data):
 
 def predict_investment_type(data):
     features, derived_metrics = compute_features(data)
-    pred_encoded = model.predict(np.array(features))[0]
+
+    feature_array = np.array(features)
+
+    pred_encoded = model.predict(feature_array)[0]
     pred_label = label_encoder.inverse_transform([pred_encoded])[0]
-    return pred_label, derived_metrics
+
+    confidence = None
+    if hasattr(model, "predict_proba"):
+        probs = model.predict_proba(feature_array)[0]
+        confidence = float(np.max(probs))
+
+    return pred_label, derived_metrics, confidence
 
 
 def generate_allocation(predicted_type):
@@ -112,3 +121,77 @@ def estimate_annual_return(predicted_type):
         "Aggressive": 0.14
     }
     return returns_map[predicted_type]
+def generate_top_factors(data, derived_metrics):
+    factors = []
+
+    if derived_metrics["disposable_income"] > 30000:
+        factors.append("High disposable income")
+
+    if data["time_horizon_years"] >= 10:
+        factors.append("Long investment horizon")
+
+    if derived_metrics["financial_buffer"] > 6:
+        factors.append("Strong financial buffer")
+
+    if derived_metrics["savings_to_goal_ratio"] > 0.15:
+        factors.append("Healthy savings relative to goal")
+
+    if data["income_stability"] == 2:
+        factors.append("Stable income profile")
+
+    if derived_metrics["goal_feasibility_ratio"] < 0.5:
+        factors.append("High goal pressure")
+
+    return factors[:3]
+def build_context(data, derived_metrics):
+    context = {}
+
+    if derived_metrics["goal_feasibility_ratio"] < 0.5:
+        context["goal_pressure"] = "high"
+    else:
+        context["goal_pressure"] = "normal"
+
+    if derived_metrics["financial_buffer"] < 3:
+        context["liquidity_risk"] = "high"
+    else:
+        context["liquidity_risk"] = "normal"
+
+    if data["risk_profile"] == 2 and derived_metrics["financial_buffer"] < 4:
+        context["risk_mismatch"] = True
+    else:
+        context["risk_mismatch"] = False
+
+    return context
+def adjust_recommendation(predicted_type, context):
+    order = ["Conservative", "Balanced", "Growth", "Aggressive"]
+    idx = order.index(predicted_type)
+
+    if context.get("liquidity_risk") == "high" and idx > 0:
+        idx -= 1
+
+    if context.get("risk_mismatch") and idx > 0:
+        idx -= 1
+
+    if context.get("goal_pressure") == "high" and idx < len(order) - 1:
+        idx += 1
+
+    return order[idx]
+def get_adjustment_reason(predicted_type, adjusted_type, context):
+    if predicted_type == adjusted_type:
+        return "No adjustment required."
+
+    reasons = []
+
+    if context.get("liquidity_risk") == "high":
+        reasons.append("limited liquidity buffer")
+
+    if context.get("risk_mismatch"):
+        reasons.append("risk-capacity mismatch")
+
+    if context.get("goal_pressure") == "high":
+        reasons.append("high goal pressure")
+
+    if not reasons:
+        return "Adjusted using financial context."
+
+    return f"Adjusted due to {', '.join(reasons)}."

@@ -59,3 +59,10 @@ def generate_projection_series(current_savings, monthly_sip, annual_return, year
         })
 
     return projections
+def calculate_goal_probability(projected_corpus, financial_goal):
+    if financial_goal <= 0:
+        return 0.0
+
+    probability = projected_corpus / financial_goal
+    probability = max(0.0, min(1.0, probability))
+    return round(probability, 2)
