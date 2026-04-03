@@ -1,16 +1,18 @@
 /**
- * API Service – centralised HTTP client for the Flask backend.
+ * API Service - centralized HTTP client for the Flask backend.
  * All requests automatically include the JWT token from localStorage.
  */
 
 import axios from 'axios';
 
+const baseURL = import.meta.env.VITE_API_BASE_URL || '';
+
 const api = axios.create({
-  baseURL: 'http://localhost:5001',
+  baseURL,
   headers: { 'Content-Type': 'application/json' },
 });
 
-// ── Request interceptor: attach JWT token ────────────────────
+// Attach JWT token to authenticated requests.
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('token');
   if (token) {
@@ -19,7 +21,7 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// ── Response interceptor: auto-logout on 401 ─────────────────
+// Auto-logout when the backend rejects the token.
 api.interceptors.response.use(
   (res) => res,
   (err) => {
@@ -35,19 +37,18 @@ api.interceptors.response.use(
   }
 );
 
-/* ── Auth ──────────────────────────────── */
+/* Auth */
 export const signup = (data) => api.post('/auth/signup', data);
 export const login = (data) => api.post('/auth/login', data);
 
-/* ── Profile ───────────────────────────── */
+/* Profile */
 export const getProfile = () => api.get('/profile');
 export const saveProfile = (data) => api.post('/profile', data);
 
-/* ── Recommendation ────────────────────── */
+/* Recommendation */
 export const predictInvestment = (data) =>
   api.post('/recommendation/predict', data);
 
-/* optional: if you still want this name */
 export const getRecommendation = (data) =>
   api.post('/recommendation/predict', data);
 

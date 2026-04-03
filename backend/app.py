@@ -1,6 +1,6 @@
 """
-InvestWise API – main application entry point.
-Creates the Flask app, registers blueprints, and initialises extensions.
+InvestWise API - main application entry point.
+Creates the Flask app, registers blueprints, and initializes extensions.
 """
 
 from flask import Flask
@@ -19,29 +19,30 @@ def create_app() -> Flask:
     app = Flask(__name__)
     app.config.from_object(Config)
 
-    # --- Extensions ---
-    CORS(app, resources={r"/*": {"origins": "*"}})
+    CORS(app, resources={r"/*": {"origins": app.config["CORS_ORIGINS"]}})
     JWTManager(app)
     db.init_app(app)
 
-    # --- Blueprints ---
     app.register_blueprint(auth_bp)
     app.register_blueprint(profile_bp)
     app.register_blueprint(recommendation_bp)
 
-    # --- Create tables on first request context ---
     with app.app_context():
         db.create_all()
 
-    # --- Health check ---
     @app.route("/health")
     def health():
         return {"status": "ok"}, 200
-    print(app.url_map)
 
     return app
 
 
+app = create_app()
+
+
 if __name__ == "__main__":
-    app = create_app()
-    app.run(debug=True, port=5001)
+    app.run(
+        host=app.config["HOST"],
+        port=app.config["PORT"],
+        debug=app.config["DEBUG"],
+    )

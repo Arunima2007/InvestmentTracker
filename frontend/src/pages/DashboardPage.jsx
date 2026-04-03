@@ -116,24 +116,16 @@ const fetchData = useCallback(async (sip, risk) => {
       income_stability: mapStabilityToNumber(user?.income_stability),
     };
 
-    console.log('DASHBOARD PAYLOAD:', payload);
-
     const res = await predictInvestment(payload);
-    console.log('BACKEND RESPONSE:', res.data);
 
     setData(res.data);
     setError('');
   } catch (err) {
-    console.error('Backend error:', err.response?.data || err.message);
-
     if (err.response?.status === 400) {
       navigate('/profile');
     }
 
     setError(err.response?.data?.error || 'Failed to load data');
-    console.log('SIMULATION PAYLOAD:', payload);
-    console.log('BACKEND RESPONSE:', res.data);
-    console.log('Predicted Type:', res.data.recommended_investment_type);
   }
 }, [navigate, user]);
 
