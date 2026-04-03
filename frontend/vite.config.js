@@ -11,7 +11,6 @@ export default defineConfig({
       '/auth': 'http://localhost:5001',
       '/profile': 'http://localhost:5001',
       '/recommendation': 'http://localhost:5001',
-      '/projection': 'http://localhost:5001',
       '/health': 'http://localhost:5001',
     },
   },

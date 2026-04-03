@@ -428,9 +428,6 @@ export default function LandingPage() {
             <span className="text-xl">💎</span>
             <span className="gradient-text font-bold">InvestWise</span>
           </div>
-          <p className="text-text-muted text-sm">
-            © 2026 InvestWise. Built with 💜 for hackathons.
-          </p>
           <div className="flex gap-4 text-text-muted text-sm">
             <a href="#features" className="hover:text-text-primary transition-smooth no-underline text-text-muted">Features</a>
             <a href="#how-it-works" className="hover:text-text-primary transition-smooth no-underline text-text-muted">How It Works</a>

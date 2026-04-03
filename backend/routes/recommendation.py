@@ -1,88 +1,83 @@
-"""
-Recommendation & projection routes.
-"""
-
 from flask import Blueprint, request, jsonify
-from flask_jwt_extended import jwt_required, get_jwt_identity
-from models.user import User
-from services.recommendation_engine import get_recommendation
-from services.projection_engine import project_wealth
-from services.insights_engine import generate_insights
 
-recommendation_bp = Blueprint("recommendation", __name__)
+from services.recommendation_engine import (
+    predict_investment_type,
+    generate_allocation,
+    estimate_annual_return
+)
+from services.projection_engine import (
+    calculate_projected_corpus,
+    suggest_required_sip,
+    generate_goal_status,
+    generate_projection_series
+)
+from services.insights_engine import generate_personalized_recommendations
 
-
-@recommendation_bp.route("/recommendation", methods=["GET"])
-@jwt_required()
-def recommendation():
-    """
-    Return investment allocation recommendation based on the user's
-    computed risk level.
-
-    Returns 200 with allocation data, or 400 if profile is incomplete.
-    """
-    user_id = get_jwt_identity()
-    user = User.query.get(int(user_id))
-    if not user:
-        return jsonify({"error": "User not found"}), 404
-
-    if not user.profile_complete():
-        return jsonify({"error": "Please complete your financial profile first"}), 400
-
-    risk_level = user.computed_risk_level or user.risk_tolerance or "medium"
-    rec = get_recommendation(risk_level)
-
-    return jsonify({"recommendation": rec}), 200
+recommendation_bp = Blueprint("recommendation", __name__,url_prefix="/recommendation")
 
 
-@recommendation_bp.route("/projection", methods=["POST"])
-@jwt_required()
-def projection():
-    """
-    Compute wealth projection.
+@recommendation_bp.route("/predict", methods=["POST"])
+def predict_investment():
+    try:
+        data = request.get_json()
 
-    Optionally accepts overrides in the request body for "What If" mode:
-        { "monthly_sip": float, "risk_level": str }
+        required_fields = [
+            "monthly_income",
+            "monthly_expenses",
+            "current_savings",
+            "monthly_sip",
+            "financial_goal",
+            "time_horizon_years",
+            "risk_profile",
+            "income_stability"
+        ]
 
-    Falls back to the user's saved profile values when overrides are absent.
-    """
-    user_id = get_jwt_identity()
-    user = User.query.get(int(user_id))
-    if not user:
-        return jsonify({"error": "User not found"}), 404
+        for field in required_fields:
+            if field not in data:
+                return jsonify({"error": f"Missing field: {field}"}), 400
 
-    if not user.profile_complete():
-        return jsonify({"error": "Please complete your financial profile first"}), 400
+        predicted_type, derived_metrics = predict_investment_type(data)
+        allocation = generate_allocation(predicted_type)
+        annual_return = estimate_annual_return(predicted_type)
 
-    data = request.get_json(silent=True) or {}
+        projected_corpus = calculate_projected_corpus(
+            data["current_savings"],
+            data["monthly_sip"],
+            annual_return,
+            data["time_horizon_years"]
+        )
+        projection_series = generate_projection_series(
+            data["current_savings"],
+            data["monthly_sip"],
+            annual_return,
+            data["time_horizon_years"]
+        )
+        suggested_required_sip = suggest_required_sip(
+            data["financial_goal"],
+            data["current_savings"],
+            annual_return,
+            data["time_horizon_years"]
+        )
 
-    # Allow "What If" overrides
-    monthly_sip = data.get("monthly_sip", user.monthly_sip or 0)
-    risk_level = data.get("risk_level", user.computed_risk_level or user.risk_tolerance or "medium")
+        goal_status = generate_goal_status(projected_corpus, data["financial_goal"])
 
-    rec = get_recommendation(risk_level)
-    annual_return = rec["expected_annual_return"]
+        recommendations = generate_personalized_recommendations(
+            data,
+            derived_metrics,
+            predicted_type
+        )
 
-    proj = project_wealth(
-        current_savings=user.current_savings or 0,
-        monthly_sip=float(monthly_sip),
-        annual_return=annual_return,
-        years=user.time_horizon or 10,
-    )
+        return jsonify({
+            "recommended_investment_type": predicted_type,
+            "allocation": allocation,
+            "annual_return_assumption": annual_return,
+            "projected_corpus": projected_corpus,
+            "goal_status": goal_status,
+            "suggested_required_sip": suggested_required_sip,
+            "derived_metrics": derived_metrics,
+            "personalized_recommendations": recommendations,
+            "projection_series": projection_series
+        }), 200
 
-    # Generate insights
-    insights = generate_insights(
-        monthly_income=user.monthly_income,
-        monthly_expenses=user.monthly_expenses,
-        current_savings=user.current_savings or 0,
-        monthly_sip=float(monthly_sip),
-        risk_level=risk_level,
-        time_horizon=user.time_horizon or 10,
-        financial_goal=user.financial_goal or "",
-    )
-
-    return jsonify({
-        "projection": proj,
-        "recommendation": rec,
-        "insights": insights,
-    }), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500

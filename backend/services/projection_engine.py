@@ -1,65 +1,61 @@
-"""
-Wealth Projection Engine
-Uses compound interest + monthly SIP to project year-by-year corpus growth.
-"""
+def calculate_projected_corpus(current_savings, monthly_sip, annual_return, years):
+    monthly_rate = annual_return / 12
+    months = years * 12
 
-from typing import List
+    future_savings = current_savings * ((1 + annual_return) ** years)
+
+    if monthly_rate > 0:
+        future_sip = monthly_sip * (((1 + monthly_rate) ** months - 1) / monthly_rate) * (1 + monthly_rate)
+    else:
+        future_sip = monthly_sip * months
+
+    return round(future_savings + future_sip, 2)
 
 
-def project_wealth(
-    current_savings: float,
-    monthly_sip: float,
-    annual_return: float,
-    years: int,
-) -> dict:
-    """
-    Compute year-by-year wealth projection.
+def suggest_required_sip(financial_goal, current_savings, annual_return, years):
+    monthly_rate = annual_return / 12
+    months = years * 12
 
-    Formula (each year):
-      corpus = previous_corpus * (1 + annual_return) + (monthly_sip * 12)
+    future_current_savings = current_savings * ((1 + annual_return) ** years)
+    remaining_goal = max(0, financial_goal - future_current_savings)
 
-    Parameters
-    ----------
-    current_savings  : lump-sum starting amount
-    monthly_sip      : amount invested every month
-    annual_return    : expected annual return as a decimal (e.g. 0.10 for 10 %)
-    years            : projection horizon
+    if months == 0:
+        return round(remaining_goal, 2)
 
-    Returns
-    -------
-    dict with keys:
-        projections       – list of {year, corpus, total_invested, gains}
-        final_corpus      – corpus at the end of the horizon
-        total_invested    – total money put in (savings + all SIPs)
-        total_gains       – final_corpus - total_invested
-        suggested_monthly – a heuristic suggestion for monthly investment
-    """
-    projections: List[dict] = []
+    if monthly_rate == 0:
+        required_sip = remaining_goal / months
+    else:
+        required_sip = remaining_goal / ((((1 + monthly_rate) ** months - 1) / monthly_rate) * (1 + monthly_rate))
+
+    return round(max(0, required_sip), 2)
+
+
+def generate_goal_status(projected_corpus, financial_goal):
+    if financial_goal <= 0:
+        return "Invalid Goal"
+
+    ratio = projected_corpus / financial_goal
+
+    if ratio >= 1:
+        return "On Track"
+    elif ratio >= 0.75:
+        return "Moderately On Track"
+    return "Goal At Risk"
+def generate_projection_series(current_savings, monthly_sip, annual_return, years):
+    projections = []
     corpus = current_savings
     total_invested = current_savings
     monthly_rate = annual_return / 12
 
     for year in range(1, years + 1):
-        # Apply monthly compounding for 12 months
         for _ in range(12):
             corpus = corpus * (1 + monthly_rate) + monthly_sip
-        total_invested += monthly_sip * 12
+            total_invested += monthly_sip
 
         projections.append({
             "year": year,
             "corpus": round(corpus, 2),
-            "total_invested": round(total_invested, 2),
-            "gains": round(corpus - total_invested, 2),
+            "total_invested": round(total_invested, 2)
         })
 
-    # Heuristic: suggest saving at least 20 % of monthly income
-    # (caller should pass income if they want a better suggestion)
-    suggested_monthly = round(monthly_sip * 1.2, 2) if monthly_sip > 0 else 5000
-
-    return {
-        "projections": projections,
-        "final_corpus": round(corpus, 2),
-        "total_invested": round(total_invested, 2),
-        "total_gains": round(corpus - total_invested, 2),
-        "suggested_monthly": suggested_monthly,
-    }
+    return projections

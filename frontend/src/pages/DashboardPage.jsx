@@ -18,7 +18,7 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart,
 } from 'recharts';
 import { useAuth } from '../context/AuthContext';
-import { getProjection } from '../services/api';
+import { predictInvestment} from '../services/api';
 import Navbar from '../components/Navbar';
 import StatCard from '../components/StatCard';
 import InsightCard from '../components/InsightCard';
@@ -60,18 +60,82 @@ export default function DashboardPage() {
   const [simulating, setSimulating] = useState(false);
 
   // ── Fetch projection data ───────────
-  const fetchData = useCallback(async (sip, risk) => {
-    try {
-      const res = await getProjection({ monthly_sip: sip, risk_level: risk });
-      setData(res.data);
-      setError('');
-    } catch (err) {
-      if (err.response?.status === 400) {
-        navigate('/profile');
-      }
-      setError(err.response?.data?.error || 'Failed to load data');
+  const mapRiskToNumber = (risk) => {
+  if (!risk) return 1;
+  const value = String(risk).toLowerCase();
+
+  if (value === 'low') return 0;
+  if (value === 'medium') return 1;
+  if (value === 'high') return 2;
+
+  return 1;
+};
+
+const mapStabilityToNumber = (stability) => {
+  if (!stability) return 1;
+  const value = String(stability).toLowerCase();
+
+  if (value === 'unstable' || value === 'low') return 0;
+  if (value === 'moderate' || value === 'medium') return 1;
+  if (value === 'stable' || value === 'high') return 2;
+
+  return 1;
+};
+
+const mapGoalToAmount = (goal, income) => {
+  const value = String(goal || '').toLowerCase();
+
+  if (value === 'retirement') return 10000000;
+  if (value === 'house') return 5000000;
+  if (value === 'car') return 1000000;
+  if (value === 'travel') return 300000;
+  if (value === 'education') return 2000000;
+
+  // fallback based on income
+  return Math.max((income || 50000) * 60, 1000000);
+};
+
+const fetchData = useCallback(async (sip, risk) => {
+  try {
+    const income = Number(user?.monthly_income ?? 0);
+
+    const payload = {
+      monthly_income: income,
+      monthly_expenses: Number(user?.monthly_expenses ?? 0),
+      current_savings: Number(user?.current_savings ?? 0),
+      monthly_sip: Number(sip ?? user?.monthly_sip ?? 0),
+      financial_goal: Number(
+        user?.financial_goal_amount ??
+        user?.goal_amount ??
+        mapGoalToAmount(user?.financial_goal, income)
+      ),
+      time_horizon_years: Number(user?.time_horizon ?? 0),
+      risk_profile: mapRiskToNumber(
+        risk ?? user?.computed_risk_level ?? user?.risk_tolerance
+      ),
+      income_stability: mapStabilityToNumber(user?.income_stability),
+    };
+
+    console.log('DASHBOARD PAYLOAD:', payload);
+
+    const res = await predictInvestment(payload);
+    console.log('BACKEND RESPONSE:', res.data);
+
+    setData(res.data);
+    setError('');
+  } catch (err) {
+    console.error('Backend error:', err.response?.data || err.message);
+
+    if (err.response?.status === 400) {
+      navigate('/profile');
     }
-  }, [navigate]);
+
+    setError(err.response?.data?.error || 'Failed to load data');
+    console.log('SIMULATION PAYLOAD:', payload);
+    console.log('BACKEND RESPONSE:', res.data);
+    console.log('Predicted Type:', res.data.recommended_investment_type);
+  }
+}, [navigate, user]);
 
   // Initial load
   useEffect(() => {
@@ -87,18 +151,21 @@ export default function DashboardPage() {
   };
 
   // ── Derived data ────────────────────
-  const allocation = data?.recommendation?.allocation || {};
+  const allocation = data?.allocation || {};
   const pieData = Object.entries(allocation).map(([key, val]) => ({
-    name: ASSET_LABELS[key] || key,
-    value: val,
-  }));
+  name: key,
+  value: val,
+}));
 
-  const projections = data?.projection?.projections || [];
-  const insights    = data?.insights || [];
-  const finalCorpus = data?.projection?.final_corpus || 0;
-  const totalGains  = data?.projection?.total_gains || 0;
-  const annualReturn = data?.recommendation?.expected_annual_return || 0;
-
+  const projections = data?.projection_series || [];
+  const insights = data?.personalized_recommendations || [];
+  const finalCorpus = data?.projected_corpus || 0;
+  const totalGains =
+  projections.length > 0
+    ? (projections[projections.length - 1]?.corpus || 0) -
+      (projections[projections.length - 1]?.total_invested || 0)
+    : 0;
+  const annualReturn = data?.annual_return_assumption || 0;
   // ── Loading / error states ──────────
   if (loading) {
     return (

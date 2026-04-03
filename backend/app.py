@@ -37,6 +37,7 @@ def create_app() -> Flask:
     @app.route("/health")
     def health():
         return {"status": "ok"}, 200
+    print(app.url_map)
 
     return app
 
