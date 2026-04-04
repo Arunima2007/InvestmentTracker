@@ -217,48 +217,6 @@ return (
       </div>
 
       {/* ── Confidence + Goal Probability ─────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-        <div className="glass-card p-6">
-          <h2 className="text-lg font-semibold text-text-primary mb-4">Recommendation Confidence</h2>
-
-          <div className="flex flex-col gap-4">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-              <div>
-                <p className="text-text-muted text-sm">Base Recommendation</p>
-                <p className="text-text-primary text-xl font-semibold">
-                  {baseRecommendation || adjustedRecommendation || '—'}
-                </p>
-              </div>
-
-              <div>
-                <p className="text-text-muted text-sm">Final Recommendation</p>
-                <p className="text-brand-300 text-xl font-semibold">
-                  {adjustedRecommendation || '—'}
-                </p>
-              </div>
-            </div>
-
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-text-muted text-sm">Confidence Score</p>
-                <p className="text-text-primary text-sm font-medium">
-                  {Math.round((confidence || 0) * 100)}%
-                </p>
-              </div>
-              <div className="w-full h-3 rounded-full bg-white/10 overflow-hidden">
-                <div
-                  className="h-full bg-gradient-to-r from-brand-500 to-accent-500 transition-all duration-500"
-                  style={{ width: `${Math.round((confidence || 0) * 100)}%` }}
-                />
-              </div>
-            </div>
-
-            <p className="text-text-secondary text-sm">
-              {adjustmentReason || 'No contextual adjustment applied.'}
-            </p>
-          </div>
-        </div>
-
         <div className="glass-card p-6">
           <h2 className="text-lg font-semibold text-text-primary mb-4">Goal Success Probability</h2>
 
@@ -290,7 +248,6 @@ return (
             </div>
           </div>
         </div>
-      </div>
 
       {/* ── Why this recommendation ─────────────────── */}
       {topFactors?.length > 0 && (
@@ -410,38 +367,6 @@ return (
       </div>
 
       {/* ── Scenario Comparison ─────────────────── */}
-      <div className="glass-card p-6 mb-8">
-        <h2 className="text-lg font-semibold text-text-primary mb-4">Scenario Comparison</h2>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="rounded-xl border border-white/10 bg-surface-200 p-4">
-            <p className="text-text-muted text-sm">Base Strategy</p>
-            <p className="text-text-primary font-semibold">
-              {comparison?.base_recommendation || baseRecommendation || '—'}
-            </p>
-          </div>
-
-          <div className="rounded-xl border border-white/10 bg-surface-200 p-4">
-            <p className="text-text-muted text-sm">Adjusted Strategy</p>
-            <p className="text-brand-300 font-semibold">
-              {comparison?.adjusted_recommendation || adjustedRecommendation || '—'}
-            </p>
-          </div>
-
-          <div className="rounded-xl border border-white/10 bg-surface-200 p-4">
-            <p className="text-text-muted text-sm">Goal Status</p>
-            <p className="text-text-primary font-semibold">
-              {comparison?.goal_status || data?.goal_status || '—'}
-            </p>
-          </div>
-
-          <div className="rounded-xl border border-white/10 bg-surface-200 p-4">
-            <p className="text-text-muted text-sm">Projected Corpus</p>
-            <p className="text-text-primary font-semibold">
-              {fmt(comparison?.projected_corpus || finalCorpus || 0)}
-            </p>
-          </div>
-        </div>
-      </div>
 
       {/* ── What-If Simulator ──────────── */}
       <div className="glass-card p-6 mb-8">
